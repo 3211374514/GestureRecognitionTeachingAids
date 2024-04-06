@@ -1,0 +1,2 @@
+# GestureRecognitionTeachingAids
+基于手势检测的课堂教学辅助系统
