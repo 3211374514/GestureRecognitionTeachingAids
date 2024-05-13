@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import csv
 import copy
 import argparse
@@ -8,7 +10,7 @@ import math
 
 from collections import Counter
 from collections import deque
-from gtts import gTTS
+from aip import AipSpeech
 from playsound import playsound
 
 import cv2 as cv
@@ -23,15 +25,14 @@ from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 # 模型
 from model import KeyPointClassifier_R
 from model import KeyPointClassifier_L
-from model import DynamicGesturesClassifier
+from model import PointHistoryClassifier
+from model import MouseClassifier
 
-
-# from model import MouseClassifier
 
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--device", type=int, default=0)  # 摄像头选择
+    parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--width", help='cap width', type=int, default=640)
     parser.add_argument("--height", help='cap height', type=int, default=480)
 
@@ -51,23 +52,25 @@ def get_args():
 
 
 def main():
-    # 数据加载 #################################################################
+    # 加载参数 #################################################################
     args = get_args()
 
     cap_device = args.device
     cap_width = args.width
     cap_height = args.height
+
     use_static_image_mode = args.use_static_image_mode
     min_detection_confidence = args.min_detection_confidence
     min_tracking_confidence = args.min_tracking_confidence
+
     use_brect = True
 
-    # 相机 #################################################################
+    # 摄像头准备 ###############################################################
     cap = cv.VideoCapture(cap_device)
     cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
     cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
 
-    # 模型加载 #############################################################
+    # 加载模型 #############################################################
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
         static_image_mode=use_static_image_mode,
@@ -76,12 +79,12 @@ def main():
         min_tracking_confidence=min_tracking_confidence,
     )
 
-    keypoint_classifier_R = KeyPointClassifier_R(invalid_value=8, score_th=0.4)  # 静态手势识别模型
+    keypoint_classifier_R = KeyPointClassifier_R(invalid_value=8, score_th=0.4)
     keypoint_classifier_L = KeyPointClassifier_L(invalid_value=8, score_th=0.4)
-    # mouse_classifier = MouseClassifier(invalid_value=2, score_th=0.4)
-    dynamic_gestures_classifier = DynamicGesturesClassifier()  # 动态手势识别模型
+    mouse_classifier = MouseClassifier(invalid_value=2, score_th=0.4)
+    point_history_classifier = PointHistoryClassifier()
 
-    # 读取标签文件labels ###########################################################
+    # 读取labels标签 ###########################################################
     with open(
             'model/keypoint_classifier/keypoint_classifier_label.csv', encoding='utf-8-sig') as f:
         keypoint_classifier_labels = csv.reader(f)
@@ -95,123 +98,166 @@ def main():
             row[0] for row in point_history_classifier_labels
         ]
 
-        # FPS 帧率显示 ########################################################
-        cvFpsCalc = CvFpsCalc(buffer_len=3)
+    # FPS 计算 ########################################################
+    cvFpsCalc = CvFpsCalc(buffer_len=3)
 
-    # 坐标历史记录 用于动态手势记录食指的16帧坐标变换############################
-    history_length = 16  # 记录连续16帧的坐标变化
-    point_history = deque(maxlen=history_length)  # 记录连续16帧的坐标变化
+    # 坐标的历史记录 #################################################################
+    history_length = 16
+    point_history = deque(maxlen=history_length)
 
-    # 手指手势历史记录 ################################################
+    # 手指的坐标历史 ################################################
     finger_gesture_history = deque(maxlen=history_length)
+    mouse_id_history = deque(maxlen=40)
+    keypoint_id_history = deque(maxlen=40)
 
-    # 靜態手勢最常出現參數初始化
-    keypoint_length = 5  # 静态手势识别队列长度
+    # 静态手势最常出现的队列
+    keypoint_length = 5
     keypoint_R = deque(maxlen=keypoint_length)
     keypoint_L = deque(maxlen=keypoint_length)
 
-    # result deque
+    # rest队列
     rest_length = 300
     rest_result = deque(maxlen=rest_length)
     speed_up_count = deque(maxlen=3)
 
-    # 前置准备
-    mode = 0  # 模式，初始为0，select_mode来改变
+    # ========= 按键模式前置准备 =========
+    mode = 0
+    presstime = presstime_2 = presstime_3 = resttime = presstime_4 = time.time()
+
+    detect_mode = 2
+    what_mode = 'mouse'
+    landmark_list = 0
     pyautogui.PAUSE = 0
 
-    # ========= 鼠标前置作業 =========
-    wScr, hScr = pyautogui.size()  # 获取屏幕大小
+    # ========= 鼠标模式前置准备 =========
+    wScr, hScr = pyautogui.size()
     frameR = 100
-    smoothening = 5
+    smoothening = 7
     plocX, plocY = 0, 0
     clocX, clocY = 0, 0
+    plocX2, plocY2 = 0, 0
+    clocX2, clocY2 = 0, 0
     mousespeed = 1.5
     clicktime = time.time()
-    # 关闭 滑鼠移至角落保护措施
+    # 关闭鼠标滑至角落的保护措施
     pyautogui.FAILSAFE = False
-    # == == == == =  == == == == =
 
+    # =======================使用百度云API进行文字转语音============================
+    # 百度云中应用的API Key, Secret Key, App ID
+    APP_ID = '69546438'
+    API_KEY = 'f5l0L12DkJxgcT1RDHroL1Uz'
+    SECRET_KEY = 'unUe5MloEW0WvhaEyRc2b8fdGOKIMdH4'
+    # 初始化AipSpeech对象
+    Client = AipSpeech(APP_ID, API_KEY, SECRET_KEY)
+
+    # baiduText2Audio(text="ppt播放控制模式",client=Client,mp3="keyboard.mp3")
+    # baiduText2Audio(text="鼠标模式",client=Client,mp3="mouse.mp3")
+    # baiduText2Audio(text="欢迎使用本系统",client=Client,mp3="a1.mp3")
+
+    # ======================================================================
+    # ===========自定义数据===================
     i = 0
-    mouseDown = 0
-
-    # ========= 主程序 =========
+    finger_gesture_id = 0
+    mouseDown = 0  # 鼠标左键是否按下
+    laserPointer = 0  # 激光笔是否启动
+    playsound('a1.mp3', block=False)
+    # ========= 主程序运行 =========
     while True:
+        left_id = right_id = -1
         fps = cvFpsCalc.get()
-        # 键盘按键读取，esc退出
+
+        # 接收键盘按键 (ESC: 退出程序)
         key = cv.waitKey(10)
         if key == 27:  # ESC
             break
         number, mode = select_mode(key, mode)
-        # 相机捕捉 #####################################################
+
+        # 相机画面
         ret, image = cap.read()
         if not ret:
             break
-        image = cv.flip(image, 1)  # 镜像显示
-        debug_image = copy.deepcopy(image)  # 创建了当前帧的深拷贝
+        image = cv.flip(image, 1)  # 画面镜像反转
+        debug_image = copy.deepcopy(image)
 
-        # 検出実施 检测强制执行 ###########################################
+        # 手部检测
         image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
         image.flags.writeable = False
         results = hands.process(image)
         image.flags.writeable = True
 
+        if results.multi_hand_landmarks is None:
+            rest_id = 0
+            rest_result.append(rest_id)
+        if results.multi_hand_landmarks is not None:
+            rest_id = 1
+            rest_result.append(rest_id)
+        most_common_rest_result = Counter(rest_result).most_common()
 
+        # 10s无动作切换到rest模式###################
+        if time.time() - resttime > 10:
+            if detect_mode != 0:
+                detect_mode = 0
+                what_mode = 'Sleep'
+                print(f'Current mode => {what_mode}')
+
+        # 检测到手
         if results.multi_hand_landmarks is not None:
             for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
-
-                # 手部轮廓矩形计算
+                # 手部外矩形计算
                 brect = calc_bounding_rect(debug_image, hand_landmarks)
-                # Landmark 计算
+                # landmark计算
                 landmark_list = calc_landmark_list(debug_image, hand_landmarks)
                 # print(landmark_list)
 
-                # 转化为相对坐标，最终正规化
+                # 转换为相对坐标/归一化坐标
                 pre_processed_landmark_list = pre_process_landmark(landmark_list)
                 pre_processed_point_history_list = pre_process_point_history(debug_image, point_history)
                 # 写入csv文件
                 logging_csv(number, mode, pre_processed_landmark_list, pre_processed_point_history_list)
 
-                # 靜態手勢資料預測
+                # 静态手势预测
                 hand_sign_id_R = keypoint_classifier_R(pre_processed_landmark_list)
                 hand_sign_id_L = keypoint_classifier_L(pre_processed_landmark_list)
-
-
+                mouse_id = mouse_classifier(pre_processed_landmark_list)
+                # print(mouse_id)
                 if handedness.classification[0].label[0:] == 'Left':
                     left_id = hand_sign_id_L
 
                 else:
                     right_id = hand_sign_id_R
 
-                    # 手比one 触发动态手势捕捉
-                if right_id == 1 or left_id == 1:
-                    point_history.append(landmark_list[8])  # 将食指尖坐标加入point_history队列
+                    # 手比good 出发动态数据获取
+                if right_id == 3:
+                    point_history.append(landmark_list[4])
                 else:
-                    point_history.append([0, 0])  # 反之加入0
+                    point_history.append([0, 0])
 
-                # 动态手势识别
+                # 动态手势预测
                 finger_gesture_id = 0
                 point_history_len = len(pre_processed_point_history_list)
                 if point_history_len == (history_length * 2):
-                    finger_gesture_id = dynamic_gestures_classifier(pre_processed_point_history_list)
-                # print(finger_gesture_id) # 0 = stop, 1 = clockwise, 2 = counterclockwise, 3 = move,偵測出現的動態手勢
+                    finger_gesture_id = point_history_classifier(pre_processed_point_history_list)
+                # print("finger_gesture_id"+str(finger_gesture_id)) # 0 = stop, 1 = clockwise, 2 = counterclockwise, 3 = move,偵測出現的動態手勢
 
-                # 计算动态手勢最常出現id #########################################
+                # 动态手势最常出現id #########################################
+
                 finger_gesture_history.append(finger_gesture_id)
                 most_common_fg_id = Counter(finger_gesture_history).most_common()
 
-                # 滑鼠的deque
-                # mouse_id_history.append(mouse_id)
-                # most_common_ms_id = Counter(mouse_id_history).most_common()
+                # 鼠标的deque
+                mouse_id_history.append(mouse_id)
+                keypoint_id_history.append(hand_sign_id_R)
+                most_common_ms_id = Counter(mouse_id_history).most_common()
+                most_common_kp_id = Counter(keypoint_id_history).most_common()
                 # print(f'finger_gesture_history = {finger_gesture_history}')
                 # print(f'most_common_fg_id = {most_common_fg_id}')
 
-                # 静态手勢最常出現id #########################################
+                # 静态手势最常出現id #########################################
                 hand_gesture_id = [right_id, left_id]
                 keypoint_R.append(hand_gesture_id[0])
                 keypoint_L.append(hand_gesture_id[1])
-                # print(keypoint_R) # deque右手的靜態id
-                # print(most_common_keypoint_id) # 右手靜態id最大
+
                 if right_id != -1:
                     most_common_keypoint_id = Counter(keypoint_R).most_common()
                 else:
@@ -222,10 +268,10 @@ def main():
 
                 ###############################################################
 
-                # 绘图
-                debug_image = draw_bounding_rect(use_brect, debug_image, brect)  # 手部轮廓矩形
-                debug_image = draw_landmarks(debug_image, landmark_list)  # 21个关键点坐标连线
-                debug_image = draw_info_text(  # 文字
+                # 绘图部分
+                debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                debug_image = draw_landmarks(debug_image, landmark_list)
+                debug_image = draw_info_text(
                     debug_image,
                     brect,
                     handedness,
@@ -239,100 +285,125 @@ def main():
         debug_image = draw_point_history(debug_image, point_history)
         debug_image = draw_info(debug_image, fps, mode, number)
 
-        # 偵測是否有手勢 #########################################
-
+        # 检测是否有手势 #########################################
         if left_id + right_id > -2:
             if time.time() - presstime > 1:
-
-                # 模式切换
-                # if most_common_ms_id[0][0] == 3 and most_common_ms_id[0][1] == 40:  # Gesture six changes to the different mode
-                #     print('Mode has changed')
-                #     detect_mode = (detect_mode + 1) % 3
-                #     if detect_mode == 0:
-                #         what_mode = 'Sleep'
-                #         # playsound('rest.mp3', block=False)
-                #     if detect_mode == 1:
-                what_mode = 'Keyboard'
-                #         # playsound('keyboard.mp3', block=False)
-                #     if detect_mode == 2:
-                #         what_mode = 'Mouse'
-                #         # playsound('mouse.mp3', block=False)
-                #     print(f'Current mode => {what_mode}')
-                detect_mode = 2
-                presstime = time.time() + 1
+                # 模式转换
+                if most_common_kp_id[0][0] == 7 and most_common_kp_id[0][
+                    1] == 40:  # 手势six控制模式转换
+                    print('Mode has changed')
+                    detect_mode = (detect_mode + 1) % 3
+                    if detect_mode == 0:
+                        what_mode = 'Sleep'
+                        # playsound('rest.mp3', block=False)
+                    if detect_mode == 1:
+                        what_mode = 'PPT'
+                        playsound('keyboard.mp3', block=False)
+                    if detect_mode == 2:
+                        what_mode = 'Mouse'
+                        playsound('mouse.mp3', block=False)
+                    print(f'Current mode => {what_mode}')
+                    presstime = time.time() + 1
 
                 # 键盘控制
-                if detect_mode == 1:
+                elif detect_mode == 1:
                     if time.time() - presstime_2 > 1:
-                        # 靜態手勢控制 ################################################
-                        # ppt播放控制 #################################
-                        control_keyboard(most_common_keypoint_id, 2, 'N', keyboard_TF=True, print_TF=True)  # 下一张ppt
-                        control_keyboard(most_common_keypoint_id, 9, 'P', keyboard_TF=True, print_TF=True)  # 上一张ppt
-                        control_keyboard_hotkey(most_common_keypoint_id, 5,
-                                         ['shift', 'f5'], keyboard_TF=True, print_TF=True)  # 从当前ppt放映
-                        control_keyboard(most_common_keypoint_id, 6, 'esc', keyboard_TF=True, print_TF=True)  # 结束放映
-                        # 画笔控制 #################################
-                        control_keyboard_hotkey(most_common_keypoint_id, 5,
-                                                ['ctrl', 'p'], keyboard_TF=True, print_TF=True)  # 变笔
-                        control_keyboard_hotkey(most_common_keypoint_id, 5,
-                                                ['ctrl', 'A'], keyboard_TF=True, print_TF=True)  # 变箭头
-                        control_keyboard(most_common_keypoint_id, 9, 'E', keyboard_TF=True, print_TF=True)  # 全部擦除
-                        # 视频播放 #################################
-                        control_keyboard_hotkey(most_common_keypoint_id, 5,
-                                                ['alt', 'p'], keyboard_TF=True, print_TF=True)  # 播放/暂停
-                        control_keyboard_hotkey(most_common_keypoint_id, 5,
-                                                ['alt', 'u'], keyboard_TF=True, print_TF=True)  # 静音
+                        # 静态手势控制
 
+                        control_keyboard_hotkey(most_common_keypoint_id, 3, ['shift', 'f5'], keyboard_TF=True,
+                                                print_TF=True)
+                        # control_keyboard(most_common_keypoint_id, 4, 'esc', keyboard_TF=True, print_TF=True)
                         presstime_2 = time.time()
 
-                    # 放大
-                    if most_common_keypoint_id[0][0] == 0 and most_common_keypoint_id[0][1] == 5:
-                        print(i, time.time() - presstime_4)
-                        if i == 3 and time.time() - presstime_4 > 0.3:
-                            pyautogui.press('+')
-                            i = 0
-                            presstime_4 = time.time()
-                        elif i == 3 and time.time() - presstime_4 > 0.25:
-                            pyautogui.press('+')
-                            presstime_4 = time.time()
-                        elif time.time() - presstime_4 > 1:
-                            pyautogui.press('+')
-                            i += 1
-                            presstime_4 = time.time()
-                        # print(i,presstime_4)
-
-                    # 缩小
-                    if most_common_keypoint_id[0][0] == 7 and most_common_keypoint_id[0][1] == 5:
+                    # 下一张ppt
+                    if most_common_keypoint_id[0][0] == 6 and most_common_keypoint_id[0][1] == 5:
                         # print(i, time.time() - presstime_4)
-                        if i == 3 and time.time() - presstime_4 > 0.3:
-                            pyautogui.press('-')
+                        if i == 5 and time.time() - presstime_4 > 0.6:
+                            pyautogui.press('down')
                             i = 0
                             presstime_4 = time.time()
-                        elif i == 3 and time.time() - presstime_4 > 0.25:
-                            pyautogui.press('-')
+                        elif i == 5 and time.time() - presstime_4 > 0.55:
+                            pyautogui.press('down')
                             presstime_4 = time.time()
                         elif time.time() - presstime_4 > 1:
-                            pyautogui.press('- ')
+                            pyautogui.press('down')
                             i += 1
                             presstime_4 = time.time()
 
-                    # 动态手势控制#################
-                    # 音量加
+                    # 上一张ppt
+                    if most_common_keypoint_id[0][0] == 5 and most_common_keypoint_id[0][1] == 5:
+                        # print(i, time.time() - presstime_4)
+                        if i == 5 and time.time() - presstime_4 > 0.6:
+                            pyautogui.press('up')
+                            i = 0
+                            presstime_4 = time.time()
+                        elif i == 5 and time.time() - presstime_4 > 0.55:
+                            pyautogui.press('up')
+                            presstime_4 = time.time()
+                        elif time.time() - presstime_4 > 1:
+                            pyautogui.press('up')
+                            i += 1
+                            presstime_4 = time.time()
+
+                    # 动态手势控制
                     if most_common_fg_id[0][0] == 1 and most_common_fg_id[0][1] > 12:
                         if time.time() - presstime_3 > 1.5:
-                            volumeControl(volChange=True)
-                            print('音量+')
+                            pyautogui.press('+')
+                            print('放大ppt')
                             presstime_3 = time.time()
-                    # 音量减
                     elif most_common_fg_id[0][0] == 2 and most_common_fg_id[0][1] > 12:
                         if time.time() - presstime_3 > 1.5:
-                            volumeControl(volChange=False)
-                            print('音量-')
+                            pyautogui.press('-')
+                            print('缩小ppt')
                             presstime_3 = time.time()
 
-            if detect_mode == 2:
-                fingers = fingersUp(landmark_list)
-                # print(fingers)
+                    if hand_gesture_id[0] == 1:  # pointer手势启动激光笔
+                        # print(laserPointer)
+                        if laserPointer == 0:
+                            pyautogui.hotkey(['ctrl', 'l'])
+                            laserPointer = 1
+
+                        x1, y1 = landmark_list[8]
+                        x3 = np.interp(x1, (50, (cap_width - 50)), (0, wScr))
+                        y3 = np.interp(y1, (30, (cap_height - 170)), (0, hScr))
+                        cv.rectangle(debug_image, (50, 30), (cap_width - 50, cap_height - 170),
+                                     (255, 0, 255), 2)
+                        clocX = plocX + (x3 - plocX) / smoothening
+                        clocY = plocY + (y3 - plocY) / smoothening
+                        plocX, plocY = clocX, clocY
+                        clocX2 = plocX2 + (x3 - plocX2) / 2
+                        clocY2 = plocY2 + (y3 - plocY2) / 2
+                        plocX2, plocY2 = clocX2, clocY2
+
+                        pyautogui.moveTo(clocX, clocY)
+                        cv.circle(debug_image, (x1, y1), 15, (255, 0, 255), cv.FILLED)
+
+                    if hand_gesture_id[0] == 4:  # ok手势拖拽
+                        x1, y1 = landmark_list[8]
+                        x3 = np.interp(x1, (50, (cap_width - 50)), (0, wScr))
+                        y3 = np.interp(y1, (30, (cap_height - 170)), (0, hScr))
+                        cv.rectangle(debug_image, (50, 30), (cap_width - 50, cap_height - 170),
+                                     (255, 0, 255), 2)
+                        clocX = plocX + (x3 - plocX) / (smoothening - 2)
+                        clocY = plocY + (y3 - plocY) / (smoothening - 2)
+                        plocX, plocY = clocX, clocY
+                        if mouseDown == 0:
+                            mouseDown = 1
+
+                        pyautogui.mouseDown(button='left')
+                        pyautogui.moveTo(clocX, clocY)
+                        # print("mouseDown")
+
+                    if hand_gesture_id[0] == 0:  # zero手势清零
+                        if mouseDown == 1:
+                            pyautogui.mouseUp(button='left')
+                            mouseDown = 0
+                        if laserPointer == 1:
+                            laserPointer = 0
+
+            if detect_mode == 2:  # 鼠标模式
+
+                #fingers = fingersUp(landmark_list)
 
                 x1, y1 = landmark_list[8]
                 x3 = np.interp(x1, (50, (cap_width - 50)), (0, wScr))
@@ -342,95 +413,52 @@ def main():
                 clocX = plocX + (x3 - plocX) / smoothening
                 clocY = plocY + (y3 - plocY) / smoothening
                 plocX, plocY = clocX, clocY
+                clocX2 = plocX2 + (x3 - plocX2) / 2
+                clocY2 = plocY2 + (y3 - plocY2) / 2
+                plocX2, plocY2 = clocX2, clocY2
 
-                # if mouse_id == 0:  # Point gesture
-                if fingers[1] == 1 and fingers[2] == 0:
-                    # print(landmark_list[8]) #index finger
-                    # print(landmark_list[12]) #middle finger
-                    ##x1, y1 = landmark_list[8]
-                    # print(landmark_list)
-                    # cv.rectangle(debug_image, (frameR, frameR), (cap_width - frameR, cap_height - frameR),
-                    #                            (255, 0, 255), 2)
-                    # cv.rectangle(debug_image, (50, 30), (cap_width - 50, cap_height - 170),
-                    #              (255, 0, 255), 2)
-                    # 座標轉換
-                    # x軸: 鏡頭上50~(cap_width - 50)轉至螢幕寬0~wScr
-                    # y軸: 鏡頭上30~(cap_height - 170)轉至螢幕長0~hScr
-                    # x3 = np.interp(x1, (50, (cap_width - 50)), (0, wScr))
-                    # y3 = np.interp(y1, (30, (cap_height - 170)), (0, hScr))
-                    # x3 = np.interp(x1, (frameR, (cap_width - frameR)), (0, wScr))
-                    # y3 = np.interp(y1, (frameR, (cap_height - frameR)), (0, hScr))
-                    # print(x3, y3)
-
-                    # 6. Smoothen Values
-                    # clocX = plocX + (x3 - plocX) / smoothening
-                    # clocY = plocY + (y3 - plocY) / smoothening
-                    # 7. Move Mouse
+                if hand_gesture_id[0] == 1:  # pointer手势控制鼠标移动
+                    if mouseDown == 1:
+                        pyautogui.mouseUp(button='left')
+                        mouseDown = 0
                     pyautogui.moveTo(clocX, clocY)
                     cv.circle(debug_image, (x1, y1), 15, (255, 0, 255), cv.FILLED)
-                    # plocX, plocY = clocX, clocY
 
-                #if mouse_id == 1:
-                if fingers[1] == 1 and fingers[2] == 1:
-                    length, img, lineInfo = findDistance(landmark_list[8], landmark_list[12], debug_image)
 
-                    # 10. Click mouse if distance short
-                    # if time.time() - clicktime > 0.5:
-                    #     if length < 40:
-                    #         cv.circle(img, (lineInfo[4], lineInfo[5]),
-                    #                   15, (0, 255, 0), cv.FILLED)
-                    #         #pyautogui.click(clicks=1)
-                    #         #pyautogui.dragTo(x3, y3, button='left')
-                    #         pyautogui.mouseDown(button='left')
-                    #         pyautogui.moveTo(clocX, clocY)
-                    #         print('click')
-                    #         clicktime = time.time()
-                    # plocX, plocY = clocX, clocY
-                    if length < 40:
-                        cv.circle(img, (lineInfo[4], lineInfo[5]),
-                                  15, (0, 255, 0), cv.FILLED)
-                        print('mouseDown=' + str(mouseDown))
+                if hand_gesture_id[0] == 2:  # yeah手势点击
+                    img, lineInfo = findDistance(landmark_list[8], landmark_list[12], landmark_list[5],
+                                                         landmark_list[9], debug_image)
+                    # 计算食指与中指两条射线是否相交
+                    cosAngle = check_intersection(landmark_list[8], landmark_list[12], landmark_list[5],
+                                                  landmark_list[9])
+                    # print(cosAngle)
+                    if time.time() - clicktime > 0.5:  # 两次点击时间间隔
+                        if cosAngle:
+                            cv.circle(img, (lineInfo[4], lineInfo[5]),
+                                      15, (0, 255, 0), cv.FILLED)
+                            # pyautogui.click(clicks=1)
+                            print('click')
+                            clicktime = time.time()
 
-                        # pyautogui.click(clicks=1)
-                        # pyautogui.dragTo(x3, y3, button='left')
-                        if mouseDown == 0:
-                            pyautogui.mouseDown(button='left')
-                            print('mouseDown')
-                            mouseDown = 1
-                            print(mouseDown)
-                        pyautogui.moveTo(clocX, clocY)
-                    else:
 
-                        if mouseDown == 1:
-                            pyautogui.mouseUp(button='left')
-                            mouseDown = 0
 
-                            # pyautogui.mouseUp()
-                            print('mouseUp')
+                # 动态手势控制
+                if most_common_fg_id[0][0] == 1 and most_common_fg_id[0][1] > 12:
+                    if time.time() - presstime_3 > 1.5:
+                        volumeControl(volChange=True)  # 音量控制
+                        print('speed up')
+                        presstime_3 = time.time()
+                elif most_common_fg_id[0][0] == 2 and most_common_fg_id[0][1] > 12:
+                    if time.time() - presstime_3 > 1.5:
+                        volumeControl(volChange=False)
+                        print('slow down')
+                        presstime_3 = time.time()
 
-                    # if length > 70:
-                    #     cv.circle(img, (lineInfo[4], lineInfo[5]),
-                    #               15, (0, 255, 0), cv.FILLED)
-                    # pyautogui.click(clicks=2)
-                    # print('click*2')
-                    # clicktime = time.time()
 
-                # if most_common_keypoint_id[0][0] == 5 and most_common_keypoint_id[0][1] == 5:
-                #     pyautogui.scroll(20)
-                #
-                # if most_common_keypoint_id[0][0] == 6 and most_common_keypoint_id[0][1] == 5:
-                #     pyautogui.scroll(-20)
-
-                # if left_id == 7 or right_id == 7:
-                # if most_common_keypoint_id[0][0] == 0 and most_common_keypoint_id[0][1] == 5:
-                #     if time.time() - clicktime > 1:
-                #         pyautogui.click(clicks=2)
+                # if most_common_keypoint_id[0][0] == 9 and most_common_keypoint_id[0][1] == 5:
+                #     if time.time() - clicktime > 2:
+                #         pyautogui.hotkey('alt', 'left')
                 #         clicktime = time.time()
-
-                if most_common_keypoint_id[0][0] == 9 and most_common_keypoint_id[0][1] == 5:
-                    if time.time() - clicktime > 2:
-                        pyautogui.hotkey('alt', 'left')
-                        clicktime = time.time()
 
         cv.putText(debug_image, what_mode, (400, 30), cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 4, cv.LINE_AA)
         # Screen reflection ###################################JL##########################
@@ -465,6 +493,17 @@ def fingersUp(landmark_list):
     return fingers
 
 
+def select_mode(key, mode):
+    number = -1
+    if 48 <= key <= 57:  # 0 ~ 9
+        number = key - 48
+    if key == 110:  # n正常模式
+        mode = 0
+    if key == 107:  # k静态手势数据收集
+        mode = 1
+    if key == 104:  # h动态手势数据收集
+        mode = 2
+    return number, mode
 
 
 def calc_bounding_rect(image, landmarks):
@@ -485,12 +524,20 @@ def calc_bounding_rect(image, landmarks):
     return [x, y, x + w, y + h]
 
 
+############################################################
+def calculate_distance(point1, point2):
+    x1, y1, z1 = point1.x, point1.y, point1.z
+    x2, y2, z2 = point2.x, point2.y, point2.z
+    distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2)
+    return distance
+
+
 def calc_landmark_list(image, landmarks):
     image_width, image_height = image.shape[1], image.shape[0]
 
     landmark_point = []
 
-    # Keypoint
+    # 关键点
     for _, landmark in enumerate(landmarks.landmark):
         landmark_x = min(int(landmark.x * image_width), image_width - 1)
         landmark_y = min(int(landmark.y * image_height), image_height - 1)
@@ -504,7 +551,7 @@ def calc_landmark_list(image, landmarks):
 def pre_process_landmark(landmark_list):
     temp_landmark_list = copy.deepcopy(landmark_list)
 
-    # Convert to relative coordinates
+    # 转换为相对坐标
     base_x, base_y = 0, 0
     for index, landmark_point in enumerate(temp_landmark_list):
         if index == 0:
@@ -513,11 +560,11 @@ def pre_process_landmark(landmark_list):
         temp_landmark_list[index][0] = temp_landmark_list[index][0] - base_x
         temp_landmark_list[index][1] = temp_landmark_list[index][1] - base_y
 
-    # Convert to a one-dimensional list
+    # 转换为一维坐标
     temp_landmark_list = list(
         itertools.chain.from_iterable(temp_landmark_list))
 
-    # Normalization
+    # 正规化
     max_value = max(list(map(abs, temp_landmark_list)))
 
     def normalize_(n):
@@ -533,7 +580,7 @@ def pre_process_point_history(image, point_history):
 
     temp_point_history = copy.deepcopy(point_history)
 
-    # Convert to relative coordinates
+    # 转化为相对坐标
     base_x, base_y = 0, 0
     for index, point in enumerate(temp_point_history):
         if index == 0:
@@ -542,15 +589,15 @@ def pre_process_point_history(image, point_history):
         temp_point_history[index][0] = (temp_point_history[index][0] - base_x) / image_width
         temp_point_history[index][1] = (temp_point_history[index][1] - base_y) / image_height
 
-    # Convert to a one-dimensional list
+    # 转化为一维坐标
     temp_point_history = list(
         itertools.chain.from_iterable(temp_point_history))
 
     return temp_point_history
 
 
+# 写入csv文件
 def logging_csv(number, mode, landmark_list, point_history_list):
-    print(mode)
     if mode == 0:
         pass
     if mode == 1 and (0 <= number <= 9):
@@ -567,9 +614,9 @@ def logging_csv(number, mode, landmark_list, point_history_list):
 
 
 def draw_landmarks(image, landmark_point):
-    # 连线
+    # 连接线
     if len(landmark_point) > 0:
-        # 拇指
+        # 大拇指
         cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[3]), (0, 0, 0), 6)
         cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[3]), (255, 255, 255), 2)
         cv.line(image, tuple(landmark_point[3]), tuple(landmark_point[4]), (0, 0, 0), 6)
@@ -607,85 +654,85 @@ def draw_landmarks(image, landmark_point):
         cv.line(image, tuple(landmark_point[19]), tuple(landmark_point[20]), (0, 0, 0), 6)
         cv.line(image, tuple(landmark_point[19]), tuple(landmark_point[20]), (255, 255, 255), 2)
 
-        # 手掌心
+        # 手掌
         cv.line(image, tuple(landmark_point[0]), tuple(landmark_point[1]), (0, 0, 0), 6)
-        cv.line(image, tuple(landmark_point[0]), tuple(landmark_point[1]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[0]), tuple(landmark_point[1]), (234, 230, 47), 2)
         cv.line(image, tuple(landmark_point[1]), tuple(landmark_point[2]), (0, 0, 0), 6)
-        cv.line(image, tuple(landmark_point[1]), tuple(landmark_point[2]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[1]), tuple(landmark_point[2]), (234, 230, 47), 2)
         cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[5]), (0, 0, 0), 6)
-        cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[5]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[5]), (234, 230, 47), 2)
         cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[9]), (0, 0, 0), 6)
-        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[9]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[9]), (234, 230, 47), 2)
         cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[13]), (0, 0, 0), 6)
-        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[13]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[13]), (234, 230, 47), 2)
         cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[17]), (0, 0, 0), 6)
-        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[17]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[17]), (234, 230, 47), 2)
         cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[0]), (0, 0, 0), 6)
-        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[0]), (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[0]), (234, 230, 47), 2)
 
     # 21个关键点
     for index, landmark in enumerate(landmark_point):
-        if index == 0:
+        if index == 0:  # 手掌1
+            cv.circle(image, (landmark[0], landmark[1]), 5, (198, 134, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 1:  # 手掌2
+            cv.circle(image, (landmark[0], landmark[1]), 5, (198, 134, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 2:  # 拇指根
+            cv.circle(image, (landmark[0], landmark[1]), 5, (198, 134, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 3:  # 拇指第一关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 1:
-            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
-            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 2:
-            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
-            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 3:
-            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
-            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 4:
+        if index == 4:  # 拇指第二关节
             cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
-        if index == 5:
+        if index == 5:  # 食指第一关节
+            cv.circle(image, (landmark[0], landmark[1]), 5, (198, 134, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 6:  # 食指第2关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 6:
+        if index == 7:  # 食指第3关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 7:
-            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
-            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 8:
+        if index == 8:  # 食指尖
             cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
-        if index == 9:
+        if index == 9:  # 中指
+            cv.circle(image, (landmark[0], landmark[1]), 5, (198, 134, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 10:  # 中指：第2关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 10:
+        if index == 11:  # 中指：第3关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 11:
-            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
-            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 12:
+        if index == 12:  # 中指：指尖
             cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
-        if index == 13:
+        if index == 13:  # 无名指
+            cv.circle(image, (landmark[0], landmark[1]), 5, (198, 134, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 14:  # 无名指：第2关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 14:
+        if index == 15:  # 无名指：第3关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 15:
-            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
-            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 16:
+        if index == 16:  # 无名指：指尖
             cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
-        if index == 17:
+        if index == 17:  # 小指
+            cv.circle(image, (landmark[0], landmark[1]), 5, (198, 134, 255), -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 18:  # 小指：第2关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 18:
+        if index == 19:  # 小指：第1关节
             cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 19:
-            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255), -1)
-            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
-        if index == 20:
+        if index == 20:  # 小指：指尖
             cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255), -1)
             cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
 
@@ -694,7 +741,7 @@ def draw_landmarks(image, landmark_point):
 
 def draw_bounding_rect(use_brect, image, brect):
     if use_brect:
-
+        # 外部矩形
         cv.rectangle(image, (brect[0], brect[1]), (brect[2], brect[3]),
                      (0, 0, 0), 1)
 
@@ -713,9 +760,9 @@ def draw_info_text(image, brect, handedness, hand_sign_text,
                cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv.LINE_AA)
 
     if finger_gesture_text != "":
-        cv.putText(image, "手势:" + finger_gesture_text, (10, 60),
+        cv.putText(image, "Finger Gesture:" + finger_gesture_text, (10, 60),
                    cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 4, cv.LINE_AA)
-        cv.putText(image, "手势:" + finger_gesture_text, (10, 60),
+        cv.putText(image, "Finger Gesture:" + finger_gesture_text, (10, 60),
                    cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2,
                    cv.LINE_AA)
 
@@ -756,9 +803,11 @@ def control_keyboard(most_common_keypoint_id, select_right_id, command, keyboard
             if print_TF:
                 print(command)
 
-def control_keyboard_hotkey(most_common_keypoint_id, select_right_id, command, keyboard_TF=True, print_TF=True
-                     ):
+                presstime_4 = time.time()
 
+
+def control_keyboard_hotkey(most_common_keypoint_id, select_right_id, command, keyboard_TF=True, print_TF=True
+                            ):
     if most_common_keypoint_id[0][0] == select_right_id and most_common_keypoint_id[0][1] == 5:
         if keyboard_TF:
             pyautogui.hotkey(command)
@@ -828,49 +877,63 @@ def pick_command(inputstring='what command'):
     return com
 
 
-def findDistance(p1, p2, img, draw=True, r=15, t=3):
+def check_intersection(a, b, c, d):  # 计算射线CA,DB是否相交
+    # 射线CA的方向向量
+    ca = (a[0] - c[0], a[1] - c[1])
+    # 射线DB的方向向量
+    db = (b[0] - d[0], b[1] - d[1])
+
+    # 计算向量的叉乘
+    cross_product = ca[0] * db[1] - ca[1] * db[0]
+    # print(cross_product)
+    # 如果叉乘结果小于零，则射线相交
+    return cross_product < 0
+
+
+def findDistance(p1, p2, p3, p4, img, draw=True, r=15, t=3):
     x1, y1 = p1
     x2, y2 = p2
+    x3, y3 = p3
+    x4, y4 = p4
     cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
     if draw:
         cv.line(img, (x1, y1), (x2, y2), (255, 0, 255), t)
+        cv.line(img, (x1, y1), (x3, y3), (66, 251, 223), t)
+        cv.line(img, (x2, y2), (x4, y4), (66, 251, 223), t)
         cv.circle(img, (x1, y1), r, (255, 0, 255), cv.FILLED)
         cv.circle(img, (x2, y2), r, (255, 0, 255), cv.FILLED)
-        length = math.hypot(x2 - x1, y2 - y1)
         cv.circle(img, (cx, cy), r, (0, 0, 255), cv.FILLED)
+        #length = math.hypot(x2 - x1, y2 - y1)
 
-    return length, img, [x1, y1, x2, y2, cx, cy]
+    return img, [x1, y1, x2, y2, cx, cy]
 
-def volumeControl(volChange=True):
+
+def volumeControl(volChange=True):  # 系统音量控制
     devices = AudioUtilities.GetSpeakers()
     interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
     volume = interface.QueryInterface(IAudioEndpointVolume)
     # volume.GetMute()
     nowVol = volume.GetMasterVolumeLevel()  # 获取当前音量
     if volChange:
-        nowVol = min(nowVol+4, 0)
+        nowVol = min(nowVol + 4, 0)
     else:
-        nowVol = max(nowVol-5, -65)
+        nowVol = max(nowVol - 5, -65)
 
     volume.SetMasterVolumeLevel(nowVol, None)  # 调节音量
 
 
+def baiduText2Audio(text, client, mp3):
+    # 调用百度API进行文本转语音
+    result = client.synthesis(text, 'zh', 1, {
+        'vol': 5, 'per': 5118  # 参数，如音量、语速、发音人等
+    })
 
-
-def select_mode(key, mode):
-    number = -1
-    if 48 <= key <= 57:  # 0 ~ 9
-        number = key - 48
-    if key == 110:  # n
-        mode = 0
-    if key == 107:  # k
-        mode = 1
-    if key == 104:  # h
-        mode = 2
-    return number, mode
-
-
+    # 如果合成正确，结果为音频二进制，写入文件
+    if not isinstance(result, dict):
+        with open(mp3, 'wb') as f:
+            f.write(result)
+            print('文本转语音成功')
 
 
 if __name__ == '__main__':
