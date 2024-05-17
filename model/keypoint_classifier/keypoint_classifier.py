@@ -9,7 +9,7 @@ class KeyPointClassifier_R(object):
         model_path='model/keypoint_classifier/keypoint_classifier_R.tflite',
         num_threads=1,
         score_th=0.1,
-        invalid_value=8,
+        invalid_value=9,
     ):
         self.interpreter = tf.lite.Interpreter(model_path=model_path, num_threads=num_threads)
         self.interpreter.allocate_tensors()
@@ -56,7 +56,7 @@ class KeyPointClassifier_L(object):
         model_path='model/keypoint_classifier/keypoint_classifier_L.tflite',
         num_threads=1,
         score_th=0.1,
-        invalid_value=8,
+        invalid_value=9,
     ):
         self.interpreter = tf.lite.Interpreter(model_path=model_path, num_threads=num_threads)
         self.interpreter.allocate_tensors()

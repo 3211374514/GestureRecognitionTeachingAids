@@ -1,0 +1,130 @@
+# -*- coding: utf-8 -*-
+
+# Form implementation generated from reading ui file 'ui1.ui'
+#
+# Created by: PyQt5 UI code generator 5.13.2
+#
+# WARNING! All changes made in this file will be lost!
+import sys
+
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+
+class Ui_MainWindow(object):
+
+
+
+    def setupUi(self, MainWindow):
+        MainWindow.setObjectName("MainWindow")
+        MainWindow.resize(800, 600)
+        font = QtGui.QFont()
+        font.setPointSize(8)
+        MainWindow.setFont(font)
+        self.centralwidget = QtWidgets.QWidget(MainWindow)
+        self.centralwidget.setObjectName("centralwidget")
+        self.sysName = QtWidgets.QLabel(self.centralwidget)
+        self.sysName.setGeometry(QtCore.QRect(170, 20, 431, 41))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.sysName.sizePolicy().hasHeightForWidth())
+        self.sysName.setSizePolicy(sizePolicy)
+        font = QtGui.QFont()
+        font.setFamily("微软雅黑")
+        font.setPointSize(17)
+        font.setBold(True)
+        font.setWeight(75)
+        font.setKerning(True)
+        self.sysName.setFont(font)
+        self.sysName.setObjectName("sysName")
+        self.cameraView = QtWidgets.QLabel(self.centralwidget)
+        self.cameraView.setGeometry(QtCore.QRect(40, 180, 451, 321))
+        self.cameraView.setStyleSheet("background-color: cyan")
+        self.cameraView.setObjectName("cameraView")
+        self.FPSLabel = QtWidgets.QLabel(self.centralwidget)
+        self.FPSLabel.setGeometry(QtCore.QRect(540, 190, 71, 31))
+        palette = QtGui.QPalette()
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Active, QtGui.QPalette.Button, brush)
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Active, QtGui.QPalette.Base, brush)
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Active, QtGui.QPalette.Window, brush)
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Inactive, QtGui.QPalette.Button, brush)
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Inactive, QtGui.QPalette.Base, brush)
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Inactive, QtGui.QPalette.Window, brush)
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Button, brush)
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Base, brush)
+        brush = QtGui.QBrush(QtGui.QColor(0, 255, 255))
+        brush.setStyle(QtCore.Qt.SolidPattern)
+        palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Window, brush)
+        self.FPSLabel.setPalette(palette)
+        self.FPSLabel.setAutoFillBackground(False)
+        self.FPSLabel.setStyleSheet("background-color: cyan")
+        self.FPSLabel.setObjectName("FPSLabel")
+        self.LRLabel = QtWidgets.QLabel(self.centralwidget)
+        self.LRLabel.setGeometry(QtCore.QRect(540, 240, 71, 31))
+        self.LRLabel.setStyleSheet("background-color: cyan")
+        self.LRLabel.setObjectName("LRLabel")
+        self.gestureLabel = QtWidgets.QLabel(self.centralwidget)
+        self.gestureLabel.setGeometry(QtCore.QRect(540, 294, 72, 31))
+        self.gestureLabel.setStyleSheet("background-color: cyan")
+        self.gestureLabel.setObjectName("gestureLabel")
+        self.label = QtWidgets.QLabel(self.centralwidget)
+        self.label.setGeometry(QtCore.QRect(540, 360, 191, 131))
+        self.label.setStyleSheet("background-color: cyan")
+        self.label.setObjectName("label")
+        self.label_2 = QtWidgets.QLabel(self.centralwidget)
+        self.label_2.setGeometry(QtCore.QRect(40, 100, 131, 41))
+        self.label_2.setStyleSheet("background-color: cyan")
+        self.label_2.setObjectName("label_2")
+        self.label_3 = QtWidgets.QLabel(self.centralwidget)
+        self.label_3.setGeometry(QtCore.QRect(520, 100, 131, 41))
+        self.label_3.setStyleSheet("background-color: red")
+        self.label_3.setObjectName("label_3")
+        MainWindow.setCentralWidget(self.centralwidget)
+        self.menubar = QtWidgets.QMenuBar(MainWindow)
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 25))
+        self.menubar.setObjectName("menubar")
+        MainWindow.setMenuBar(self.menubar)
+        self.statusbar = QtWidgets.QStatusBar(MainWindow)
+        self.statusbar.setObjectName("statusbar")
+        MainWindow.setStatusBar(self.statusbar)
+
+        self.retranslateUi(MainWindow)
+        QtCore.QMetaObject.connectSlotsByName(MainWindow)
+
+    def retranslateUi(self, MainWindow):
+        _translate = QtCore.QCoreApplication.translate
+        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        self.sysName.setText(_translate("MainWindow", "基于手势检测的课堂教学辅助系统"))
+        self.cameraView.setText(_translate("MainWindow", "cameraView"))
+        self.FPSLabel.setText(_translate("MainWindow", "FPS："))
+        self.LRLabel.setText(_translate("MainWindow", "L/R："))
+        self.gestureLabel.setText(_translate("MainWindow", "手势："))
+        self.label.setText(_translate("MainWindow", "指令描述："))
+        self.label_2.setText(_translate("MainWindow", "当前模式："))
+        self.label_3.setText(_translate("MainWindow", "退出系统"))
+
+
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    sys.exit(app.exec_())
