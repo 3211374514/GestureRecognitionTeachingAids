@@ -26,6 +26,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         #self.timer = QTimer(self)
         self.setupUi(self)
         self.CAM_NUM = 0
+        self.on_top = False
         #self.cap = cv2.VideoCapture()
         self.background()
         # 在label中播放视频
@@ -37,6 +38,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 文件选择按钮
         self.openCamPushbutton.clicked.connect(self.start_camera)
         self.closeCamPushbutton.clicked.connect(self.stop_camera)
+        self.checkBox.clicked.connect(self.toggle_window_stays_on_top)
 
         self.openCamPushbutton.setEnabled(True)
         # 初始状态不能关闭摄像头
@@ -98,19 +100,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
 
-    def receive_data(self, data_sent,hand_sent,hand_sent2,x,y,mode):
+    def receive_data(self, data_sent,hand_sent,hand_sent2,x,y,mode,kylabel0,kylabel00,phlabel0,phlabel00):
         #self.video_capture = VideoCapture()
         self.fpsLabel.setText(str(data_sent))
-        self.handLabel.setText(str(hand_sent))
+        self.handLabel.setText(str(hand_sent))#静态手势label
         self.handLabel_2.setText(str(hand_sent2))
         self.xLabel.setText(str(x))
         self.yLabel.setText(str(y))
         if mode == 1:
             self.modeLabel.setText('PPT播放控制模式')
+            self.doLabel.setText(str(kylabel0))
+            self.doLabel_2.setText(str(phlabel0))
         elif mode == 0:
             self.modeLabel.setText('睡眠模式')
         else:
             self.modeLabel.setText('媒体控制模式')
+            self.doLabel.setText(str(kylabel00))
+            self.doLabel_2.setText(str(phlabel00))
+
+
 
         # 在这里处理接收到的int值
         #print("接收到的数值：", data_sent,hand_sent)
@@ -130,6 +138,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         #self.stop_camera()
         # 你的其他清理逻辑
         super(MainWindow, self).closeEvent(event)
+
+    def toggle_window_stays_on_top(self):
+        if self.on_top:
+            # 取消窗口始终置顶
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowStaysOnTopHint)
+            self.on_top = False
+        else:
+            # 设置窗口始终置顶
+            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+            self.on_top = True
+
+        # 重新显示窗口以使变更生效
+        self.show()
 
 
 

@@ -59,7 +59,7 @@ def get_args():
     return args
 class VideoCapture(QObject):
     frame_captured = pyqtSignal(np.ndarray)
-    data_sent = pyqtSignal(float,str,str,int,int,int)
+    data_sent = pyqtSignal(float,str,str,int,int,int,str,str,str,str)
     hand_sent = pyqtSignal(str)
     is_capturing = False
     playsound('a1.mp3', block=False)
@@ -106,10 +106,34 @@ class VideoCapture(QObject):
                 row[0] for row in keypoint_classifier_labels
             ]
         with open(
+                'model/keypoint_classifier/keypoint_classifier_label0.csv', encoding='utf-8-sig') as f:
+            keypoint_classifier_labels0 = csv.reader(f)
+            keypoint_classifier_labels0 = [
+                row[0] for row in keypoint_classifier_labels0
+            ]
+        with open(
+                'model/keypoint_classifier/keypoint_classifier_label00.csv', encoding='utf-8-sig') as f:
+            keypoint_classifier_labels00 = csv.reader(f)
+            keypoint_classifier_labels00 = [
+                row[0] for row in keypoint_classifier_labels00
+            ]
+        with open(
                 'model/point_history_classifier/point_history_classifier_label.csv', encoding='utf-8-sig') as f:
             point_history_classifier_labels = csv.reader(f)
             point_history_classifier_labels = [
                 row[0] for row in point_history_classifier_labels
+            ]
+        with open(
+                'model/point_history_classifier/point_history_classifier_label0.csv', encoding='utf-8-sig') as f:
+            point_history_classifier_labels0 = csv.reader(f)
+            point_history_classifier_labels0 = [
+                row[0] for row in point_history_classifier_labels0
+            ]
+        with open(
+                'model/point_history_classifier/point_history_classifier_label00.csv', encoding='utf-8-sig') as f:
+            point_history_classifier_labels00 = csv.reader(f)
+            point_history_classifier_labels00 = [
+                row[0] for row in point_history_classifier_labels00
             ]
 
         # FPS 计算 ########################################################
@@ -499,7 +523,11 @@ class VideoCapture(QObject):
             #self.data_sent.emit(fps,keypoint_classifier_labels[most_common_keypoint_id[0][0]])
             self.data_sent.emit(fps,keypoint_classifier_labels[most_common_keypoint_id[0][0]],
                                 point_history_classifier_labels[most_common_fg_id[0][0]],
-                                clocX, clocY,detect_mode)
+                                clocX, clocY,detect_mode,
+                                keypoint_classifier_labels0[most_common_keypoint_id[0][0]],
+                                keypoint_classifier_labels00[most_common_keypoint_id[0][0]],
+                                point_history_classifier_labels0[most_common_fg_id[0][0]],
+                                point_history_classifier_labels00[most_common_fg_id[0][0]])
 
             #self.hand_sent.emit(keypoint_classifier_labels[most_common_keypoint_id[0][0]])
 
