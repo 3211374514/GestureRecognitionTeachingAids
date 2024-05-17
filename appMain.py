@@ -14,7 +14,7 @@ import PyQt5
 from collections import Counter
 from collections import deque
 
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QObject
+from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QObject, QThread
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QApplication
 from aip import AipSpeech
@@ -61,6 +61,8 @@ class VideoCapture(QObject):
     frame_captured = pyqtSignal(np.ndarray)
     data_sent = pyqtSignal(float,str,str,int,int,int)
     hand_sent = pyqtSignal(str)
+    is_capturing = False
+    playsound('a1.mp3', block=False)
     def main(self):
 
         # 加载参数 #################################################################
@@ -77,8 +79,8 @@ class VideoCapture(QObject):
         use_brect = True
 
         # 摄像头准备 ###############################################################
-        cap = cv.VideoCapture(cap_device)
-        print(cap)
+        #cap = cv.VideoCapture(cap_device)
+        #print(cap)
         #cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
         #cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
 
@@ -165,7 +167,8 @@ class VideoCapture(QObject):
 
         # baiduText2Audio(text="ppt播放控制模式",client=Client,mp3="keyboard.mp3")
         # baiduText2Audio(text="鼠标模式",client=Client,mp3="mouse.mp3")
-        # baiduText2Audio(text="欢迎使用本系统",client=Client,mp3="a1.mp3")
+        #baiduText2Audio(text="相机已开启",client=Client,mp3="openCam.mp3")
+        #baiduText2Audio(text="相机已关闭",client=Client,mp3="closeCam.mp3")
 
         # ======================================================================
         # ===========自定义数据===================
@@ -173,13 +176,13 @@ class VideoCapture(QObject):
         finger_gesture_id = 0
         mouseDown = 0  # 鼠标左键是否按下
         laserPointer = 0  # 激光笔是否启动
-        playsound('a1.mp3', block=False)
+
         qtime = QTimer()
         most_common_keypoint_id = [(9, 5)]
         most_common_fg_id = [(4,16)]
 
         # ========= 主程序运行 =========
-        while True:
+        while self.is_capturing:
             #qtime.start()
             left_id = right_id = -1
             fps = cvFpsCalc.get()
@@ -190,7 +193,13 @@ class VideoCapture(QObject):
             number, mode = select_mode(key, mode)
 
             # 相机画面
-            ret, image = cap.read()
+            #ret, image = cap.read()
+            ret,image = self.__capture_loop()
+            print(ret)
+            #print(image)
+
+            #image = self.__capture_loop()
+
             #print("ret"+str(ret))
             #ret = self.camControl
             if not ret:
@@ -495,11 +504,48 @@ class VideoCapture(QObject):
             #self.hand_sent.emit(keypoint_classifier_labels[most_common_keypoint_id[0][0]])
 
         #self.close()
-        cap.release()
+        #cap.release()
         cv.destroyAllWindows()
 
     def camControl(self,flag):
         return flag
+
+    def start_capture(self, camera_index=0):
+        if not self.is_capturing:
+            playsound('openCam.mp3', block=False)
+            self.capture = cv.VideoCapture(camera_index)
+            self.is_capturing = True
+            self.thread = QThread()  # 使用线程进行摄像头捕获，以避免阻塞UI
+            self.moveToThread(self.thread)
+            self.thread.started.connect(self.__capture_loop)
+            self.thread.start()
+
+    def stop_capture(self):
+
+        if self.is_capturing:
+            playsound('closeCam.mp3', block=False)
+            self.is_capturing = False
+            self.capture.release()
+            self.thread.quit()
+            self.thread.wait()
+
+    def __capture_loop(self):
+        print("__capture_loop")
+        #while self.is_capturing:
+        ret, frame = self.capture.read()
+        #print("ret"+str(ret))
+        #print("frame"+str(frame))
+        return ret,frame
+
+    def closeSys(self):
+        if self.is_capturing:
+            #playsound('closeCam.mp3', block=False)
+            self.is_capturing = False
+            self.capture.release()
+            self.thread.quit()
+            self.thread.wait()
+        cv.destroyAllWindows()
+
 
 
 tipIds = [4, 8, 12, 16, 20]

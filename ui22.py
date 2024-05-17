@@ -35,8 +35,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def background(self):
         # 文件选择按钮
-        self.openCamPushbutton.clicked.connect(self.open_camera)
-        self.closeCamPushbutton.clicked.connect(self.close_camera)
+        self.openCamPushbutton.clicked.connect(self.start_camera)
+        self.closeCamPushbutton.clicked.connect(self.stop_camera)
 
         self.openCamPushbutton.setEnabled(True)
         # 初始状态不能关闭摄像头
@@ -97,11 +97,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.video_capture.main() # 在合适的时机开始捕获图像
 
 
-    def stop_video_capture(self):
-        self.video_capture = VideoCapture()
-        #self.video_capture.frame_captured.connect(self.update_image)  # 连接信号
-        self.video_capture.camControl(flag=False) # 在合适的时机开始捕获图像
-        self.video_capture.main()  # 在合适的时机开始捕获图像
 
     def receive_data(self, data_sent,hand_sent,hand_sent2,x,y,mode):
         #self.video_capture = VideoCapture()
@@ -120,6 +115,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 在这里处理接收到的int值
         #print("接收到的数值：", data_sent,hand_sent)
 
+    def start_camera(self):
+        index = self.comboBox.currentIndex()
+        self.video_capture.start_capture(camera_index=index)  # 开始捕获
+        self.video_capture.main()
+
+    def stop_camera(self):
+        self.video_capture.stop_capture()  # 停止捕获
+
+    def closeEvent(self, event):
+        # 安全停止摄像头线程
+        #self.camera_thread.stop()
+        self.video_capture.closeSys()
+        #self.stop_camera()
+        # 你的其他清理逻辑
+        super(MainWindow, self).closeEvent(event)
+
 
 
 if __name__ == '__main__':
@@ -127,7 +138,9 @@ if __name__ == '__main__':
     main = MainWindow()
     main.show()
     main.start_video_capture()
+    #main.stop_camera()
     sys.exit(app.exec_())
+
 
 
 
