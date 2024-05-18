@@ -38,11 +38,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 文件选择按钮
         self.openCamPushbutton.clicked.connect(self.start_camera)
         self.closeCamPushbutton.clicked.connect(self.stop_camera)
+        #self.checkBox.clicked.connect(self.toggle_window_stays_on_top)
         self.checkBox.clicked.connect(self.toggle_window_stays_on_top)
+        self.checkBox_2.clicked.connect(self.toggle_window_stays_on_top2)
 
         self.openCamPushbutton.setEnabled(True)
         # 初始状态不能关闭摄像头
-        self.closeCamPushbutton.setEnabled(True)
+        self.closeCamPushbutton.setEnabled(False)
+        self.checkBox_2.setEnabled(False)
 
     # 打开相机采集视频
     def open_camera(self):
@@ -76,7 +79,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(np.ndarray)
     def update_image(self, cv_img):
         """更新图像的槽."""
+
         qt_img = self.convert_cv_qt(cv_img)
+
         self.camLabel.setAlignment(Qt.AlignCenter)
         self.camLabel.setPixmap(qt_img)
 
@@ -93,7 +98,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def start_video_capture(self):
         self.video_capture = VideoCapture()
+        print("start_video_capture")
+
         self.video_capture.frame_captured.connect(self.update_image)  # 连接信号
+
         self.video_capture.data_sent.connect(self.receive_data)
         #self.video_capture.hand_sent.connect(self.receive_data)
         self.video_capture.main() # 在合适的时机开始捕获图像
@@ -124,11 +132,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         #print("接收到的数值：", data_sent,hand_sent)
 
     def start_camera(self):
+        # 打开摄像头按钮不能点击
+        self.openCamPushbutton.setEnabled(False)
+        # 关闭摄像头按钮可以点击
+        self.closeCamPushbutton.setEnabled(True)
+        # 手势绘图按钮可以点击
+        self.checkBox_2.setEnabled(True)
+
         index = self.comboBox.currentIndex()
         self.video_capture.start_capture(camera_index=index)  # 开始捕获
         self.video_capture.main()
 
     def stop_camera(self):
+        # 打开摄像头按钮可以点击
+        self.openCamPushbutton.setEnabled(True)
+        # 关闭摄像头按钮不能点击
+        self.closeCamPushbutton.setEnabled(False)
+        # 手势绘图按钮可以点击
+        self.checkBox_2.setEnabled(False)
         self.video_capture.stop_capture()  # 停止捕获
 
     def closeEvent(self, event):
@@ -151,6 +172,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # 重新显示窗口以使变更生效
         self.show()
+
+    def toggle_window_stays_on_top2(self):
+        self.video_capture.changeImage()
 
 
 

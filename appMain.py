@@ -59,6 +59,7 @@ def get_args():
     return args
 class VideoCapture(QObject):
     frame_captured = pyqtSignal(np.ndarray)
+    frame_captured2 = pyqtSignal(np.ndarray)
     data_sent = pyqtSignal(float,str,str,int,int,int,str,str,str,str)
     hand_sent = pyqtSignal(str)
     is_capturing = False
@@ -219,7 +220,7 @@ class VideoCapture(QObject):
             # 相机画面
             #ret, image = cap.read()
             ret,image = self.__capture_loop()
-            print(ret)
+            #print(ret)
             #print(image)
 
             #image = self.__capture_loop()
@@ -231,6 +232,7 @@ class VideoCapture(QObject):
                 break
             image = cv.flip(image, 1)  # 画面镜像反转
             debug_image = copy.deepcopy(image)
+            debug_image_2 = copy.deepcopy(image)
 
             # 手部检测
             image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
@@ -338,8 +340,8 @@ class VideoCapture(QObject):
                 most_common_keypoint_id = [(9, 5)]
                 most_common_fg_id = [(4, 16)]
 
-            debug_image = draw_point_history(debug_image, point_history)
-            debug_image = draw_info(debug_image, fps, mode, number)
+            #debug_image = draw_point_history(debug_image, point_history)
+            #debug_image = draw_info(debug_image, fps, mode, number)
 
             # 检测是否有手势 #########################################
             if left_id + right_id > -2:
@@ -492,7 +494,7 @@ class VideoCapture(QObject):
                             if cosAngle:
                                 cv.circle(img, (lineInfo[4], lineInfo[5]),
                                           15, (0, 255, 0), cv.FILLED)
-                                # pyautogui.click(clicks=1)
+                                pyautogui.click(clicks=1)
                                 print('click')
                                 clicktime = time.time()
 
@@ -516,10 +518,13 @@ class VideoCapture(QObject):
                     #         pyautogui.hotkey('alt', 'left')
                     #         clicktime = time.time()
 
-            cv.putText(debug_image, what_mode, (400, 30), cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 4, cv.LINE_AA)
+            #cv.putText(debug_image, what_mode, (400, 30), cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 4, cv.LINE_AA)
             # Screen reflection ###################################JL##########################
             #cv.imshow('Hand Gesture Recognition', debug_image)
-            self.frame_captured.emit(debug_image)
+            if self.is_changeimage :
+                self.frame_captured.emit(debug_image)
+            else:
+                self.frame_captured.emit(debug_image_2)
             #self.data_sent.emit(fps,keypoint_classifier_labels[most_common_keypoint_id[0][0]])
             self.data_sent.emit(fps,keypoint_classifier_labels[most_common_keypoint_id[0][0]],
                                 point_history_classifier_labels[most_common_fg_id[0][0]],
@@ -543,6 +548,7 @@ class VideoCapture(QObject):
             playsound('openCam.mp3', block=False)
             self.capture = cv.VideoCapture(camera_index)
             self.is_capturing = True
+            self.is_changeimage = False
             self.thread = QThread()  # 使用线程进行摄像头捕获，以避免阻塞UI
             self.moveToThread(self.thread)
             self.thread.started.connect(self.__capture_loop)
@@ -557,8 +563,14 @@ class VideoCapture(QObject):
             self.thread.quit()
             self.thread.wait()
 
+    def changeImage(self):
+        if self.is_changeimage:
+            self.is_changeimage = False
+        else:
+            self.is_changeimage = True
+
     def __capture_loop(self):
-        print("__capture_loop")
+        #print("__capture_loop")
         #while self.is_capturing:
         ret, frame = self.capture.read()
         #print("ret"+str(ret))

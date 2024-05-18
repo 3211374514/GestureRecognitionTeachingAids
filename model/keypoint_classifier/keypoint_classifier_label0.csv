@@ -7,4 +7,4 @@ before：返回上一张幻灯片
 next：切换到下一张幻灯片
 six：切换到媒体控制模式
 open：无操作
-none
+None
