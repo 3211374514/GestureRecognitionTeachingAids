@@ -340,7 +340,7 @@ class VideoCapture(QObject):
                 most_common_keypoint_id = [(9, 5)]
                 most_common_fg_id = [(4, 16)]
 
-            #debug_image = draw_point_history(debug_image, point_history)
+            debug_image = draw_point_history(debug_image, point_history)
             #debug_image = draw_info(debug_image, fps, mode, number)
 
             # 检测是否有手势 #########################################

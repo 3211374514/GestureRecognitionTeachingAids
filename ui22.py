@@ -47,34 +47,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.closeCamPushbutton.setEnabled(False)
         self.checkBox_2.setEnabled(False)
 
-    # 打开相机采集视频
-    def open_camera(self):
-        # 获取选择的设备名称
-        index = self.comboBox.currentIndex()
-        print(index)
-        self.CAM_NUM = index
-        # 检测该设备是否能打开
-        flag = self.cap.open(self.CAM_NUM)
-        print(flag)
-        if flag is False:
-            QMessageBox.information(self, "警告", "该设备未正常连接", QMessageBox.Ok)
-        else:
-            # 幕布可以播放
-            self.camLabel.setEnabled(True)
-            # 打开摄像头按钮不能点击
-            self.openCamPushbutton.setEnabled(False)
-            # 关闭摄像头按钮可以点击
-            self.closeCamPushbutton.setEnabled(True)
-        self.timer.start()
-        print("beginning！")
-
-    def close_camera(self):
-        #self.cap.release()
-        self.openCamPushbutton.setEnabled(True)
-        self.closeCamPushbutton.setEnabled(False)
-        #self.timer.stop()
-        self.stop_video_capture()
-
 
     @pyqtSlot(np.ndarray)
     def update_image(self, cv_img):
@@ -122,7 +94,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         elif mode == 0:
             self.modeLabel.setText('睡眠模式')
         else:
-            self.modeLabel.setText('媒体控制模式')
+            self.modeLabel.setText('媒体与鼠标控制模式')
             self.doLabel.setText(str(kylabel00))
             self.doLabel_2.setText(str(phlabel00))
 
@@ -149,6 +121,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 关闭摄像头按钮不能点击
         self.closeCamPushbutton.setEnabled(False)
         # 手势绘图按钮可以点击
+        self.checkBox_2.setChecked(False)
         self.checkBox_2.setEnabled(False)
         self.video_capture.stop_capture()  # 停止捕获
 
