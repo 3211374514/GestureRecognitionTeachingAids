@@ -56,7 +56,7 @@ class Ui_MainWindow(object):
         self.label_7.setFont(font)
         self.label_7.setObjectName("label_7")
         self.modeLabel = QtWidgets.QLabel(self.centralwidget)
-        self.modeLabel.setGeometry(QtCore.QRect(450, 160, 311, 31))
+        self.modeLabel.setGeometry(QtCore.QRect(450, 160, 331, 31))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 85, 0))
         brush.setStyle(QtCore.Qt.SolidPattern)

@@ -31,7 +31,6 @@ class KeyPointClassifier_R(object):
         output_details_tensor_index = self.output_details[0]['index']
 
         result = self.interpreter.get_tensor(output_details_tensor_index)
-                
         _index = 0
         _id = ['zero','pointer','yeah','good','ok','before','next','six']
         for _ in result[:][0]:
@@ -78,7 +77,7 @@ class KeyPointClassifier_L(object):
         output_details_tensor_index = self.output_details[0]['index']
 
         result = self.interpreter.get_tensor(output_details_tensor_index)
-                
+
         _index = 0
         _id = ['Close','One','Scissor','Six','Gun','Good','Down','Open','None','Ok']
         for _ in result[:][0]:

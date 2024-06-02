@@ -59,11 +59,11 @@ def get_args():
     return args
 class VideoCapture(QObject):
     frame_captured = pyqtSignal(np.ndarray)
-    frame_captured2 = pyqtSignal(np.ndarray)
+    #frame_captured2 = pyqtSignal(np.ndarray)
     data_sent = pyqtSignal(float,str,str,int,int,int,str,str,str,str)
     hand_sent = pyqtSignal(str)
     is_capturing = False
-    playsound('a1.mp3', block=False)
+    playsound('video/a1.mp3', block=False)
     def main(self):
 
         # 加载参数 #################################################################
@@ -164,7 +164,7 @@ class VideoCapture(QObject):
         mode = 0
         presstime = presstime_2 = presstime_3 = resttime = presstime_4 = time.time()
 
-        detect_mode = 1
+        detect_mode = 0
         what_mode = 'mouse'
         landmark_list = 0
         pyautogui.PAUSE = 0
@@ -191,7 +191,9 @@ class VideoCapture(QObject):
         Client = AipSpeech(APP_ID, API_KEY, SECRET_KEY)
 
         # baiduText2Audio(text="ppt播放控制模式",client=Client,mp3="keyboard.mp3")
-        # baiduText2Audio(text="鼠标模式",client=Client,mp3="mouse.mp3")
+        # baiduText2Audio(text="媒体与鼠标控制模式",client=Client,mp3="mouse.mp3")
+        # baiduText2Audio(text="音量加",client=Client,mp3="volumeUp.mp3")
+        # baiduText2Audio(text="音量减",client=Client,mp3="volumeDown.mp3")
         #baiduText2Audio(text="相机已开启",client=Client,mp3="openCam.mp3")
         #baiduText2Audio(text="相机已关闭",client=Client,mp3="closeCam.mp3")
 
@@ -201,6 +203,7 @@ class VideoCapture(QObject):
         finger_gesture_id = 0
         mouseDown = 0  # 鼠标左键是否按下
         laserPointer = 0  # 激光笔是否启动
+        pptBig = 0 # ppt是否被放大
 
         qtime = QTimer()
         most_common_keypoint_id = [(9, 5)]
@@ -251,11 +254,11 @@ class VideoCapture(QObject):
             most_common_rest_result = Counter(rest_result).most_common()
 
             # 10s无动作切换到rest模式###################
-            if time.time() - resttime > 10:
-                if detect_mode != 0:
-                    detect_mode = 0
-                    what_mode = 'Sleep'
-                    print(f'Current mode => {what_mode}')
+            # if time.time() - resttime > 10:
+            #     if detect_mode != 0:
+            #         detect_mode = 0
+            #         what_mode = 'Sleep'
+            #         print(f'Current mode => {what_mode}')
 
             # 检测到手
             if results.multi_hand_landmarks is not None:
@@ -264,16 +267,19 @@ class VideoCapture(QObject):
                     brect = calc_bounding_rect(debug_image, hand_landmarks)
                     # landmark计算
                     landmark_list = calc_landmark_list(debug_image, hand_landmarks)
-                    # print(landmark_list)
+                    #print(landmark_list)
+                    #print(results.multi_hand_landmarks)
 
                     # 转换为相对坐标/归一化坐标
                     pre_processed_landmark_list = pre_process_landmark(landmark_list)
+                    #print(pre_processed_landmark_list)
                     pre_processed_point_history_list = pre_process_point_history(debug_image, point_history)
                     # 写入csv文件
                     logging_csv(number, mode, pre_processed_landmark_list, pre_processed_point_history_list)
 
                     # 静态手势预测
                     hand_sign_id_R = keypoint_classifier_R(pre_processed_landmark_list)
+                    #print(hand_sign_id_R)
                     hand_sign_id_L = keypoint_classifier_L(pre_processed_landmark_list)
                     mouse_id = mouse_classifier(pre_processed_landmark_list)
                     # print(mouse_id)
@@ -306,6 +312,7 @@ class VideoCapture(QObject):
                     keypoint_id_history.append(hand_sign_id_R)
                     most_common_ms_id = Counter(mouse_id_history).most_common()
                     most_common_kp_id = Counter(keypoint_id_history).most_common()
+                    #print(most_common_kp_id)
                     # print(f'finger_gesture_history = {finger_gesture_history}')
                     #print(f'most_common_fg_id = {most_common_fg_id}')
 
@@ -350,25 +357,29 @@ class VideoCapture(QObject):
                     if most_common_kp_id[0][0] == 7 and most_common_kp_id[0][
                         1] == 40:  # 手势six控制模式转换
                         print('Mode has changed')
-                        detect_mode = (detect_mode + 1) % 3
+                        detect_mode = (detect_mode + 1) % 2
                         if detect_mode == 0:
-                            what_mode = 'Sleep'
+                            #what_mode = 'Sleep'
                             # playsound('rest.mp3', block=False)
-                        if detect_mode == 1:
                             what_mode = 'PPT'
-                            playsound('keyboard.mp3', block=False)
+                            playsound('video/keyboard.mp3', block=False)
+                        if detect_mode == 1:
+                            # what_mode = 'PPT'
+                            # playsound('video/keyboard.mp3', block=False)
+                            what_mode = 'Mouse'
+                            playsound('video/mouse.mp3', block=False)
                         if detect_mode == 2:
                             what_mode = 'Mouse'
-                            playsound('mouse.mp3', block=False)
+                            playsound('video/mouse.mp3', block=False)
                         print(f'Current mode => {what_mode}')
                         presstime = time.time() + 1
 
                     # 键盘控制
-                    elif detect_mode == 1:
+                    elif detect_mode == 0:
                         if time.time() - presstime_2 > 1:
                             # 静态手势控制
 
-                            control_keyboard_hotkey(most_common_keypoint_id, 3, ['shift', 'f5'], keyboard_TF=True,
+                            control_keyboard_hotkey(most_common_keypoint_id, 2, ['shift', 'f5'], keyboard_TF=True,
                                                     print_TF=True)
                             # control_keyboard(most_common_keypoint_id, 4, 'esc', keyboard_TF=True, print_TF=True)
                             presstime_2 = time.time()
@@ -407,6 +418,7 @@ class VideoCapture(QObject):
                         if most_common_fg_id[0][0] == 1 and most_common_fg_id[0][1] > 12:
                             if time.time() - presstime_3 > 1.5:
                                 pyautogui.press('+')
+                                pptBig = 1
                                 print('放大ppt')
                                 presstime_3 = time.time()
                         elif most_common_fg_id[0][0] == 2 and most_common_fg_id[0][1] > 12:
@@ -417,17 +429,20 @@ class VideoCapture(QObject):
 
                         if hand_gesture_id[0] == 1:  # pointer手势启动激光笔
                             # print(laserPointer)
-                            if laserPointer == 0:
+                            if mouseDown == 1:
+                                pyautogui.mouseUp(button='left')
+                            if laserPointer == 0 and mouseDown == 0:
                                 pyautogui.hotkey(['ctrl', 'l'])
                                 laserPointer = 1
+                                pptBig = 0
 
                             x1, y1 = landmark_list[8]
                             x3 = np.interp(x1, (50, (cap_width - 50)), (0, wScr))
                             y3 = np.interp(y1, (30, (cap_height - 170)), (0, hScr))
                             cv.rectangle(debug_image, (50, 30), (cap_width - 50, cap_height - 170),
                                          (255, 0, 255), 2)
-                            clocX = plocX + (x3 - plocX) / smoothening
-                            clocY = plocY + (y3 - plocY) / smoothening
+                            clocX = plocX + (x3 - plocX) / (smoothening-3)
+                            clocY = plocY + (y3 - plocY) / (smoothening-3)
                             plocX, plocY = clocX, clocY
                             clocX2 = plocX2 + (x3 - plocX2) / 2
                             clocY2 = plocY2 + (y3 - plocY2) / 2
@@ -453,14 +468,34 @@ class VideoCapture(QObject):
                             # print("mouseDown")
 
                         if hand_gesture_id[0] == 0:  # zero手势清零
+                            #print('ppt模式的zero')
                             if mouseDown == 1:
                                 pyautogui.mouseUp(button='left')
                                 mouseDown = 0
                             if laserPointer == 1:
                                 laserPointer = 0
 
-                if detect_mode == 2:  # 鼠标模式
+                if detect_mode == 1:  # 鼠标模式
+                    #print('0mouseDown=' + str(mouseDown))
+                    #print('0laserPointer=' + str(laserPointer))
+                    if hand_gesture_id[0] == 0:  # zero手势清零
+                        #print('鼠标模式的zero')
+                        if pptBig == 1:
+                            pyautogui.click(button='right')
+                            pptBig = 0
 
+                        pyautogui.hotkey('ctrl', 'a')
+
+
+
+                    if time.time() - presstime_2 > 1:
+                        control_keyboard_hotkey(most_common_keypoint_id, 4, ['alt', 'p'], keyboard_TF=True,
+                                                print_TF=True)
+                        control_keyboard_hotkey(most_common_keypoint_id, 5, ['alt', 'shift', 'left'], keyboard_TF=True,
+                                                print_TF=True)
+                        control_keyboard_hotkey(most_common_keypoint_id, 6, ['alt', 'shift', 'right'], keyboard_TF=True,
+                                                print_TF=True)
+                        presstime_2 = time.time()
                     #fingers = fingersUp(landmark_list)
 
                     x1, y1 = landmark_list[8]
@@ -468,8 +503,8 @@ class VideoCapture(QObject):
                     y3 = np.interp(y1, (30, (cap_height - 170)), (0, hScr))
                     cv.rectangle(debug_image, (50, 30), (cap_width - 50, cap_height - 170),
                                  (255, 0, 255), 2)
-                    clocX = plocX + (x3 - plocX) / smoothening
-                    clocY = plocY + (y3 - plocY) / smoothening
+                    clocX = plocX + (x3 - plocX) / (smoothening-3)
+                    clocY = plocY + (y3 - plocY) / (smoothening-3)
                     plocX, plocY = clocX, clocY
                     clocX2 = plocX2 + (x3 - plocX2) / 2
                     clocY2 = plocY2 + (y3 - plocY2) / 2
@@ -484,7 +519,7 @@ class VideoCapture(QObject):
 
 
                     if hand_gesture_id[0] == 2:  # yeah手势点击
-                        img, lineInfo = findDistance(landmark_list[8], landmark_list[12], landmark_list[5],
+                        img,length, lineInfo = findDistance(landmark_list[8], landmark_list[12], landmark_list[5],
                                                              landmark_list[9], debug_image)
                         # 计算食指与中指两条射线是否相交
                         cosAngle = check_intersection(landmark_list[8], landmark_list[12], landmark_list[5],
@@ -494,7 +529,7 @@ class VideoCapture(QObject):
                             if cosAngle:
                                 cv.circle(img, (lineInfo[4], lineInfo[5]),
                                           15, (0, 255, 0), cv.FILLED)
-                                pyautogui.click(clicks=1)
+                                pyautogui.click()
                                 print('click')
                                 clicktime = time.time()
 
@@ -504,12 +539,14 @@ class VideoCapture(QObject):
                     if most_common_fg_id[0][0] == 1 and most_common_fg_id[0][1] > 12:
                         if time.time() - presstime_3 > 1.5:
                             volumeControl(volChange=True)  # 音量控制
-                            print('speed up')
+                            print('volume up')
+                            playsound('video/volumeUp.mp3', block=False)
                             presstime_3 = time.time()
                     elif most_common_fg_id[0][0] == 2 and most_common_fg_id[0][1] > 12:
                         if time.time() - presstime_3 > 1.5:
                             volumeControl(volChange=False)
-                            print('slow down')
+                            print('volume down')
+                            playsound('video/volumeDown.mp3', block=False)
                             presstime_3 = time.time()
 
 
@@ -545,7 +582,7 @@ class VideoCapture(QObject):
 
     def start_capture(self, camera_index=0):
         if not self.is_capturing:
-            playsound('openCam.mp3', block=False)
+            playsound('video/openCam.mp3', block=False)
             self.capture = cv.VideoCapture(camera_index)
             self.is_capturing = True
             self.is_changeimage = False
@@ -557,7 +594,7 @@ class VideoCapture(QObject):
     def stop_capture(self):
 
         if self.is_capturing:
-            playsound('closeCam.mp3', block=False)
+            playsound('video/closeCam.mp3', block=False)
             self.is_capturing = False
             self.capture.release()
             self.thread.quit()
@@ -670,6 +707,7 @@ def calc_landmark_list(image, landmarks):
 
 def pre_process_landmark(landmark_list):
     temp_landmark_list = copy.deepcopy(landmark_list)
+    #print(temp_landmark_list)
 
     # 转换为相对坐标
     base_x, base_y = 0, 0
@@ -679,11 +717,11 @@ def pre_process_landmark(landmark_list):
 
         temp_landmark_list[index][0] = temp_landmark_list[index][0] - base_x
         temp_landmark_list[index][1] = temp_landmark_list[index][1] - base_y
-
+    #print(temp_landmark_list)
     # 转换为一维坐标
     temp_landmark_list = list(
         itertools.chain.from_iterable(temp_landmark_list))
-
+    #print(temp_landmark_list)
     # 正规化
     max_value = max(list(map(abs, temp_landmark_list)))
 
@@ -691,7 +729,7 @@ def pre_process_landmark(landmark_list):
         return n / max_value
 
     temp_landmark_list = list(map(normalize_, temp_landmark_list))
-
+    #print(temp_landmark_list)
     return temp_landmark_list
 
 
@@ -699,6 +737,7 @@ def pre_process_point_history(image, point_history):
     image_width, image_height = image.shape[1], image.shape[0]
 
     temp_point_history = copy.deepcopy(point_history)
+    #print(temp_point_history)
 
     # 转化为相对坐标
     base_x, base_y = 0, 0
@@ -708,10 +747,12 @@ def pre_process_point_history(image, point_history):
 
         temp_point_history[index][0] = (temp_point_history[index][0] - base_x) / image_width
         temp_point_history[index][1] = (temp_point_history[index][1] - base_y) / image_height
+    #print(temp_point_history)
 
     # 转化为一维坐标
     temp_point_history = list(
         itertools.chain.from_iterable(temp_point_history))
+    #print(temp_point_history)
 
     return temp_point_history
 
@@ -1024,9 +1065,9 @@ def findDistance(p1, p2, p3, p4, img, draw=True, r=15, t=3):
         cv.circle(img, (x1, y1), r, (255, 0, 255), cv.FILLED)
         cv.circle(img, (x2, y2), r, (255, 0, 255), cv.FILLED)
         cv.circle(img, (cx, cy), r, (0, 0, 255), cv.FILLED)
-        #length = math.hypot(x2 - x1, y2 - y1)
+        length = math.hypot(x2 - x1, y2 - y1)
 
-    return img, [x1, y1, x2, y2, cx, cy]
+    return img,length,  [x1, y1, x2, y2, cx, cy]
 
 
 def volumeControl(volChange=True):  # 系统音量控制

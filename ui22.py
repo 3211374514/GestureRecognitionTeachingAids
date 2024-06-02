@@ -88,11 +88,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.xLabel.setText(str(x))
         self.yLabel.setText(str(y))
         if mode == 1:
+            # self.modeLabel.setText('PPT播放控制模式')
+            self.modeLabel.setText('媒体与鼠标控制模式')
+            self.doLabel.setText(str(kylabel00))
+            self.doLabel_2.setText(str(phlabel00))
+            # self.doLabel.setText(str(kylabel0))
+            # self.doLabel_2.setText(str(phlabel0))
+        elif mode == 0:
+            # self.modeLabel.setText('睡眠模式')
             self.modeLabel.setText('PPT播放控制模式')
             self.doLabel.setText(str(kylabel0))
             self.doLabel_2.setText(str(phlabel0))
-        elif mode == 0:
-            self.modeLabel.setText('睡眠模式')
         else:
             self.modeLabel.setText('媒体与鼠标控制模式')
             self.doLabel.setText(str(kylabel00))
